@@ -13,6 +13,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 public class EditorWebSocketHandler extends TextWebSocketHandler {
 
     private final Map<String, Set<WebSocketSession>> rooms = new ConcurrentHashMap<>();
+    private final Map<String, String> savedMessage = new ConcurrentHashMap<>();
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -25,6 +26,14 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
 
         }
         rooms.get(roomId).add(session); // add the session to the set of sessions
+
+        if (savedMessage.containsKey(roomId)) {
+            try {
+                session.sendMessage(new TextMessage(savedMessage.get(roomId)));
+            } catch (Exception e) {
+                System.err.println("Error sending saved code to session: " + session.getId());
+            }
+        }
     }
 
     @Override
@@ -33,6 +42,8 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         System.out.println("message received: " + message.getPayload()); // print the received message
         String query = session.getUri().getQuery(); // get the query parameters from the URL
         String roomId = query.split("=")[1]; // extract the room ID from the query parameters
+
+        savedMessage.put(roomId, message.getPayload());
         for (WebSocketSession s : rooms.get(roomId)) {
             if (!s.getId().equals(session.getId()) && s.isOpen()) {
                 try {
