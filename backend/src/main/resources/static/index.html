@@ -7,7 +7,8 @@
     <ul id="log"></ul>
 
     <script>
-        const socket = new WebSocket("ws://localhost:8080/ws");
+        const room = new URLSearchParams(location.search).get("room");
+        const socket = new WebSocket("ws://localhost:8080/ws?room=" + room);
         const msgInput = document.getElementById("msg");
         const logList = document.getElementById("log");
 
