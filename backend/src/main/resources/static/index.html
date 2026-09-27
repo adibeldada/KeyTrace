@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h2>KeyTrace WebSocket Test</h2>
+    <input id="msg" placeholder="Type a message">
+    <button onclick="send()">Send</button>
+    <ul id="log"></ul>
+
+    <script>
+        const socket = new WebSocket("ws://localhost:8080/ws");
+        const msgInput = document.getElementById("msg");
+        const logList = document.getElementById("log");
+
+        socket.onopen = function(event) {
+            console.log("Connected to WebSocket server");
+        };
+
+        socket.onmessage = function(event) {
+            const message = event.data;
+            const li = document.createElement("li");
+            li.textContent = message;
+            logList.appendChild(li);
+        };
+
+        socket.onclose = function(event) {
+            console.log("Disconnected from WebSocket server");
+        };
+
+        function send() {
+            const message = msgInput.value;
+            socket.send(message);
+            msgInput.value = "";
+        }
+    </script>
+</body>
+
+</html>
