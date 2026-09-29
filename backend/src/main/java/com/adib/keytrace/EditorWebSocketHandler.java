@@ -90,4 +90,6 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
     public List<Snapshot> getSnapshot(String roomId){
         return savedSnapshot.getOrDefault(roomId, List.of());
     }
+
+
 }

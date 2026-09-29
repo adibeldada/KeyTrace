@@ -40,13 +40,41 @@ KeyTrace is a web app for practicing coding interviews. Users solve problems in 
 
 ## Roadmap
 
+### ✅ v0.1: Live collaboration
 - [x] Real-time shared editor (Spring Boot WebSockets + React/Monaco)
 - [x] Rooms with shareable links
+- [x] "New Room" button with random room IDs
 - [x] Late joiners receive current code
-- [ ] Keystroke recording
-- [ ] Session replay with timeline
+- [x] Empty rooms cleaned up automatically
+
+### ✅ v0.2: Recording & replay
+- [x] Keystroke recording with timestamps
+- [x] Session replay with timeline slider, play/pause and scrubbing
+
+### 🚧 v0.3: Sessions
+- [ ] End session (ends for everyone in the room, switches to replay)
+- [ ] Structured JSON messages with a `type` field
+- [ ] Live player count
+- [ ] Refactor room state into a `Room` class
+
+### v0.4: Modes & roles
+- [ ] Session modes: Solo, Interview/Training, Group
+- [ ] Host role (only the host can end the session)
+- [ ] Interviewer and candidate roles, private interviewer notes
+- [ ] Session timer
+
+### v0.5: Coding tools
 - [ ] Run code in a sandboxed Docker container
-- [ ] Problem panel
-- [ ] PostgreSQL persistence
-- [ ] Tests + GitHub Actions CI
+- [ ] Problem panel with built-in practice problems
+
+### v0.6: Production-ready
+- [ ] PostgreSQL persistence (sessions survive restarts)
+- [ ] Tests (JUnit, Testcontainers) + GitHub Actions CI
 - [ ] Deploy to AWS
+
+### Future ideas
+- [ ] Store edits as changes instead of full snapshots (smaller recordings)
+- [ ] Backend endpoint to fetch a single moment via binary search (for long sessions)
+- [ ] Conflict-free concurrent editing (sync engine) and live cursors
+- [ ] User accounts and saved session history
+- [ ] Session insights: time spent, longest pauses, paste detection
