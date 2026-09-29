@@ -37,3 +37,16 @@ KeyTrace is a web app for practicing coding interviews. Users solve problems in 
 - **Testing:** JUnit, Testcontainers, Playwright
 - **CI/CD:** GitHub Actions
 - **Deployment:** AWS (planned)
+
+## Roadmap
+
+- [x] Real-time shared editor (Spring Boot WebSockets + React/Monaco)
+- [x] Rooms with shareable links
+- [x] Late joiners receive current code
+- [ ] Keystroke recording
+- [ ] Session replay with timeline
+- [ ] Run code in a sandboxed Docker container
+- [ ] Problem panel
+- [ ] PostgreSQL persistence
+- [ ] Tests + GitHub Actions CI
+- [ ] Deploy to AWS
