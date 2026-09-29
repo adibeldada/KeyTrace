@@ -14,6 +14,12 @@ function App() {
     return () => socketRef.current?.close()
   }, [])
 
+     async function handleNewRoom() {
+     const response = await fetch("http://localhost:8080/api/rooms", { method: "POST" })
+     const newRoomId = await response.text()
+     window.location.href = "/?room=" + newRoomId
+   }
+
   // CHANGED: open the WebSocket here, once the editor is ready
   function handleMount(editor: any) {
     editorRef.current = editor
@@ -35,9 +41,27 @@ function App() {
     socketRef.current?.send(value ?? "")
   }
 
-  return (
-    <div>
+    return (
+  <>
+    <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
       <h1>KeyTrace, room: {room}</h1>
+      <button
+        onClick={handleNewRoom}
+        style={{
+          fontSize: "20px",
+          padding: "12px 24px",
+          backgroundColor: "#66251e",
+          color: "white",
+          border: "none",
+          borderRadius: "8px",
+          cursor: "pointer",
+        }}
+      >
+        New Room
+      </button>
+    </div>
+
+    <div>
       <Editor
         height="80vh"
         defaultLanguage="python"
@@ -47,7 +71,10 @@ function App() {
         onChange={handleChange}
       />
     </div>
-  )
+  </>
+)
+    
+  
 }
 
 export default App
