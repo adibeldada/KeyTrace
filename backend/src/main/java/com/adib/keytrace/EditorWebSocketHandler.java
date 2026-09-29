@@ -3,6 +3,9 @@ package com.adib.keytrace;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Collections;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -14,6 +17,7 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
 
     private final Map<String, Set<WebSocketSession>> rooms = new ConcurrentHashMap<>();
     private final Map<String, String> savedMessage = new ConcurrentHashMap<>();
+    private final Map<String, List<Snapshot>> savedSnapshot = new ConcurrentHashMap<>();
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -21,6 +25,11 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         System.out.println("connected: " + session.getId()); // get the session id
         String query = session.getUri().getQuery(); // get the query parameters from the URL
         if (query == null) {
+            try {
+                session.close();
+            } catch (Exception e){
+                System.err.println("Error closing session" + session.getId());
+            }
             return;
         }
         String roomId = query.split("=")[1]; // extract the room ID from the query parameters
@@ -44,6 +53,7 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         String roomId = query.split("=")[1]; // extract the room ID from the query parameters
 
         savedMessage.put(roomId, message.getPayload());
+        savedSnapshot.computeIfAbsent(roomId, k -> Collections.synchronizedList(new ArrayList<>())).add(new Snapshot(message.getPayload(), System.currentTimeMillis()));
         for (WebSocketSession s : rooms.get(roomId)) {
             if (!s.getId().equals(session.getId()) && s.isOpen()) {
                 try {
@@ -62,11 +72,6 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
 
         // this session never joined a room, so there's nothing to clean up
         if (query == null) {
-            try {
-                session.close();
-            } catch (Exception e){
-                System.err.println("Error closing session" + session.getId());
-            }
             return;
         }
 
@@ -80,5 +85,9 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         }
 
         System.out.println("disconnected: " + session.getId());
+    }
+
+    public List<Snapshot> getSnapshot(String roomId){
+        return savedSnapshot.getOrDefault(roomId, List.of());
     }
 }
