@@ -20,11 +20,11 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         // runs when a browser connects
         System.out.println("connected: " + session.getId()); // get the session id
         String query = session.getUri().getQuery(); // get the query parameters from the URL
-        String roomId = query.split("=")[1]; // extract the room ID from the query parameters
-        if (!rooms.containsKey(roomId)){
-            rooms.put(roomId,ConcurrentHashMap.newKeySet());
-
+        if (query == null) {
+            return;
         }
+        String roomId = query.split("=")[1]; // extract the room ID from the query parameters
+        rooms.computeIfAbsent(roomId, k -> ConcurrentHashMap.newKeySet());
         rooms.get(roomId).add(session); // add the session to the set of sessions
 
         if (savedMessage.containsKey(roomId)) {
@@ -58,12 +58,27 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         // runs when a browser disconnects
-        String query = session.getUri().getQuery(); // get the query parameters from the URL
-        String roomId = query.split("=")[1]; // extract the room ID from the query parameters
-        rooms.get(roomId).remove(session);
-        if (rooms.get(roomId).isEmpty()){
-            rooms.remove(roomId);
+        String query = session.getUri().getQuery();
+
+        // this session never joined a room, so there's nothing to clean up
+        if (query == null) {
+            try {
+                session.close();
+            } catch (Exception e){
+                System.err.println("Error closing session" + session.getId());
+            }
+            return;
         }
-        System.out.println("disconnected: " + session.getId()); // get the session id
+
+        String roomId = query.split("=")[1];
+        rooms.get(roomId).remove(session);
+
+        // if the room is now empty, delete it and its saved code
+        if (rooms.get(roomId).isEmpty()) {
+            rooms.remove(roomId);
+            savedMessage.remove(roomId);
+        }
+
+        System.out.println("disconnected: " + session.getId());
     }
 }
