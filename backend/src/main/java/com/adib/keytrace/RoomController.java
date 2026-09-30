@@ -30,4 +30,7 @@ public class RoomController {
 
     }
 
+    public void endSession(@PathVariable String roomId){
+        
+    }
 }

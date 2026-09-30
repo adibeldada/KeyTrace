@@ -1,11 +1,8 @@
 package com.adib.keytrace;
 
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 import java.util.List;
-import java.util.ArrayList;
-import java.util.Collections;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -15,9 +12,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 @Component
 public class EditorWebSocketHandler extends TextWebSocketHandler {
 
-    private final Map<String, Set<WebSocketSession>> rooms = new ConcurrentHashMap<>();
-    private final Map<String, String> savedMessage = new ConcurrentHashMap<>();
-    private final Map<String, List<Snapshot>> savedSnapshot = new ConcurrentHashMap<>();
+    private final Map<String, Room> rooms = new ConcurrentHashMap<>();
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -33,12 +28,12 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         String roomId = query.split("=")[1]; // extract the room ID from the query parameters
-        rooms.computeIfAbsent(roomId, k -> ConcurrentHashMap.newKeySet());
-        rooms.get(roomId).add(session); // add the session to the set of sessions
+        Room room = rooms.computeIfAbsent(roomId, k -> new Room(roomId));
+        room.addSession(session);
 
-        if (savedMessage.containsKey(roomId)) {
+        if (!room.getLatestCode().isEmpty()) {
             try {
-                session.sendMessage(new TextMessage(savedMessage.get(roomId)));
+                session.sendMessage(new TextMessage(room.getLatestCode()));
             } catch (Exception e) {
                 System.err.println("Error sending saved code to session: " + session.getId());
             }
@@ -47,19 +42,23 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        // runs when a browser sends a message
-        System.out.println("message received: " + message.getPayload()); // print the received message
-        String query = session.getUri().getQuery(); // get the query parameters from the URL
-        String roomId = query.split("=")[1]; // extract the room ID from the query parameters
+        System.out.println("message received: " + message.getPayload());
+        String query = session.getUri().getQuery();
+        String roomId = query.split("=")[1];
 
-        savedMessage.put(roomId, message.getPayload());
-        savedSnapshot.computeIfAbsent(roomId, k -> Collections.synchronizedList(new ArrayList<>())).add(new Snapshot(message.getPayload(), System.currentTimeMillis()));
-        for (WebSocketSession s : rooms.get(roomId)) {
+        Room room = rooms.get(roomId);        // CHANGED: find this person's room
+        if (room == null) {
+            return;
+        }
+
+        room.updateCode(message.getPayload()); // CHANGED: saves latest code AND records a snapshot
+
+        for (WebSocketSession s : room.getSessions()) {   // CHANGED: loop over the room's people
             if (!s.getId().equals(session.getId()) && s.isOpen()) {
                 try {
-                    s.sendMessage(message); // send the message to all other sessions
+                    s.sendMessage(message);
                 } catch (Exception e) {
-                    System.err.println("Error occurred while sending message to session: " + s.getId());
+                    System.err.println("Error sending to session: " + s.getId());
                 }
             }
         }
@@ -67,7 +66,6 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-        // runs when a browser disconnects
         String query = session.getUri().getQuery();
 
         // this session never joined a room, so there's nothing to clean up
@@ -76,19 +74,23 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         }
 
         String roomId = query.split("=")[1];
-        rooms.get(roomId).remove(session);
-
-        // if the room is now empty, delete it and its saved code
-        if (rooms.get(roomId).isEmpty()) {
-            rooms.remove(roomId);
-            savedMessage.remove(roomId);
+        Room room = rooms.get(roomId);         // CHANGED: find the room
+        if (room == null) {
+            return;
         }
+
+        room.removeSession(session);           // CHANGED: remove this person from the room
+        // CHANGED: no longer deleting empty rooms, so the recording stays for replay
 
         System.out.println("disconnected: " + session.getId());
     }
 
-    public List<Snapshot> getSnapshot(String roomId){
-        return savedSnapshot.getOrDefault(roomId, List.of());
+    public List<Snapshot> getSnapshot(String roomId) {
+        Room room = rooms.get(roomId);         // CHANGED: find the room
+        if (room == null) {
+            return List.of();                  // no such room: empty recording
+        }
+        return room.getSnapshots();            // CHANGED: the room holds its own recording
     }
 
 
