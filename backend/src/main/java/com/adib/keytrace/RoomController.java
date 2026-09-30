@@ -30,7 +30,8 @@ public class RoomController {
 
     }
 
+    @PostMapping("/api/rooms/{roomId}/end")
     public void endSession(@PathVariable String roomId){
-        
+        handler.endSession(roomId);
     }
 }

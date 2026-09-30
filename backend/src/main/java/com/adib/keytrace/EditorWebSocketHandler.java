@@ -12,6 +12,9 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 @Component
 public class EditorWebSocketHandler extends TextWebSocketHandler {
 
+    // All active rooms on the server.
+    // Key (String): the room ID from the URL, e.g. "abc" in ?room=abc
+    // Value (Room): that room's data: its sessions, latest code, snapshots, and ended status
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
 
     @Override
@@ -30,6 +33,14 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         String roomId = query.split("=")[1]; // extract the room ID from the query parameters
         Room room = rooms.computeIfAbsent(roomId, k -> new Room(roomId));
         room.addSession(session);
+        if (room.isEnded()) {
+            try {
+                session.close(new CloseStatus(4000, "Session ended"));   // late visitor: send them to replay
+            } catch (Exception e) {
+                System.err.println("Error closing session: " + session.getId());
+            }
+            return;
+        }
 
         if (!room.getLatestCode().isEmpty()) {
             try {
@@ -49,6 +60,10 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         Room room = rooms.get(roomId);        // CHANGED: find this person's room
         if (room == null) {
             return;
+        }
+
+        if (room.isEnded()) {
+            return;   // session is over, so ignore any edits
         }
 
         room.updateCode(message.getPayload()); // CHANGED: saves latest code AND records a snapshot
@@ -93,5 +108,22 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         return room.getSnapshots();            // CHANGED: the room holds its own recording
     }
 
+    // Ends the session for everyone in the room: marks it ended and disconnects them all
+    public void endSession(String roomId) {
+        Room room = rooms.get(roomId);
+        if (room == null) {
+            return;                       // no such room, nothing to end
+        }
+
+        room.end();                       // mark as ended first, so nothing new gets in
+
+        for (WebSocketSession s : room.getSessions()) {
+            try {
+                s.close(new CloseStatus(4000, "Session ended"));   // 4000 = our "session ended" code
+            } catch (Exception e) {
+                System.err.println("Error closing session: " + s.getId());
+            }
+        }   
+    }
 
 }

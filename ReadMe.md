@@ -52,7 +52,7 @@ KeyTrace is a web app for practicing coding interviews. Users solve problems in 
 - [x] Session replay with timeline slider, play/pause and scrubbing
 
 ### 🚧 v0.3: Sessions
-- [ ] End session (ends for everyone in the room, switches to replay)
+- [x] End session (ends for everyone in the room, switches to replay)
 - [ ] Structured JSON messages with a `type` field
 - [ ] Live player count
 - [ ] Refactor room state into a `Room` class

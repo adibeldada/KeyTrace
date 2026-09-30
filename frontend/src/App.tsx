@@ -12,12 +12,11 @@ function App() {
 
   // replay data kept in refs so the playback timer always sees the latest values
   const snapshotsRef = useRef<Snapshot[]>([])
-  const currentMsRef = useRef(0)          // playback position, in ms since the first snapshot
-  const shownIndexRef = useRef(-1)        // which snapshot is currently in the editor
+  const currentMsRef = useRef(0)
+  const shownIndexRef = useRef(-1)
   const intervalRef = useRef<number | null>(null)
   const lastTickRef = useRef(0)
 
-  // state = things shown on screen
   const [inReplay, setInReplay] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentMs, setCurrentMs] = useState(0)
@@ -39,9 +38,16 @@ function App() {
     window.location.href = "/?room=" + newRoomId
   }
 
-  // ---------- Replay helpers ----------
+  // ---------- End session ----------
+  // asks the backend to end the session; the backend then closes EVERYONE's
+  // connection with code 4000, and each browser switches to replay (see onclose below)
+  async function handleEndSession() {
+    const sure = window.confirm("End the session for everyone in this room?")
+    if (!sure) return
+    await fetch("http://localhost:8080/api/rooms/" + room + "/end", { method: "POST" })
+  }
 
-  // binary search: index of the last snapshot at or before `ms`
+  // ---------- Replay helpers ----------
   function indexAt(ms: number) {
     const list = snapshotsRef.current
     const target = list[0].currentTime + ms
@@ -60,10 +66,10 @@ function App() {
     return answer
   }
 
-  // move playback to `ms` and update the editor if a different snapshot should show
   function showAt(ms: number) {
     currentMsRef.current = ms
     setCurrentMs(ms)
+    if (snapshotsRef.current.length === 0) return
     const i = indexAt(ms)
     if (i !== shownIndexRef.current) {
       shownIndexRef.current = i
@@ -80,24 +86,23 @@ function App() {
     }
   }
 
-  // ---------- Replay controls ----------
+  // load the recording and switch this page into replay mode
+  async function enterReplay() {
+    if (replaying.current) return          // already in replay
+    replaying.current = true
 
-  // Replay button: load the recording and start at 0:00, paused
-  async function handleReplay() {
     const response = await fetch("http://localhost:8080/api/rooms/" + room + "/snapshots")
     const data: Snapshot[] = await response.json()
-    if (data.length === 0) return
 
     snapshotsRef.current = data
     shownIndexRef.current = -1
-    setDurationMs(data[data.length - 1].currentTime - data[0].currentTime)
-    replaying.current = true
+    setDurationMs(data.length > 0 ? data[data.length - 1].currentTime - data[0].currentTime : 0)
     setInReplay(true)
     showAt(0)
   }
 
   function play() {
-    // at the end? start over
+    if (snapshotsRef.current.length === 0) return
     if (currentMsRef.current >= durationMs) showAt(0)
 
     setIsPlaying(true)
@@ -109,11 +114,11 @@ function App() {
 
       if (next >= durationMs) {
         showAt(durationMs)
-        pause()             // reached the end
+        pause()
       } else {
         showAt(next)
       }
-    }, 50)                  // tick every 50 ms = 20 times a second
+    }, 50)
   }
 
   function pause() {
@@ -126,17 +131,9 @@ function App() {
     else play()
   }
 
-  // slider dragged: jump there (keeps playing if it was playing)
   function handleSlider(ms: number) {
     lastTickRef.current = performance.now()
     showAt(ms)
-  }
-
-  function handleBackToLive() {
-    pause()
-    showAt(durationMs)
-    replaying.current = false
-    setInReplay(false)
   }
 
   // ---------- Live editing ----------
@@ -154,6 +151,14 @@ function App() {
       editor.setValue(event.data)
       applyingRemote.current = false
     }
+
+    // the server closed our connection with code 4000 = "session ended" → go to replay.
+    // This also happens right away if you open a room that has already ended.
+    socket.onclose = (event) => {
+      if (event.code === 4000) {
+        enterReplay()
+      }
+    }
   }
 
   function handleChange(value: string | undefined) {
@@ -161,7 +166,6 @@ function App() {
     socketRef.current?.send(value ?? "")
   }
 
-  // 65000 ms → "1:05"
   function formatTime(ms: number) {
     const totalSeconds = Math.floor(ms / 1000)
     const minutes = Math.floor(totalSeconds / 60)
@@ -184,7 +188,8 @@ function App() {
       <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
         <h1>KeyTrace, room: {room}</h1>
         <button onClick={handleNewRoom} style={buttonStyle}>New Room</button>
-        {!inReplay && <button onClick={handleReplay} style={buttonStyle}>Replay</button>}
+        {!inReplay && <button onClick={handleEndSession} style={buttonStyle}>End session</button>}
+        {inReplay && <span style={{ fontSize: "18px" }}>Session ended: replay</span>}
       </div>
 
       {inReplay && (
@@ -202,7 +207,6 @@ function App() {
             style={{ flex: 1 }}
           />
           <span>{formatTime(durationMs)}</span>
-          <button onClick={handleBackToLive} style={buttonStyle}>Back to live</button>
         </div>
       )}
 
