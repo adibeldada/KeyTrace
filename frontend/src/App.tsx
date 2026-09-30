@@ -21,6 +21,7 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentMs, setCurrentMs] = useState(0)
   const [durationMs, setDurationMs] = useState(0)
+  const [playerCount, setPlayerCount] = useState<number | null>(null)   // NEW: players in the room
 
   const room = new URLSearchParams(window.location.search).get("room") ?? "test"
 
@@ -39,8 +40,6 @@ function App() {
   }
 
   // ---------- End session ----------
-  // asks the backend to end the session; the backend then closes EVERYONE's
-  // connection with code 4000, and each browser switches to replay (see onclose below)
   async function handleEndSession() {
     const sure = window.confirm("End the session for everyone in this room?")
     if (!sure) return
@@ -86,9 +85,8 @@ function App() {
     }
   }
 
-  // load the recording and switch this page into replay mode
   async function enterReplay() {
-    if (replaying.current) return          // already in replay
+    if (replaying.current) return
     replaying.current = true
 
     const response = await fetch("http://localhost:8080/api/rooms/" + room + "/snapshots")
@@ -145,15 +143,24 @@ function App() {
 
     socket.onopen = () => console.log("connected to room " + room)
 
+    // CHANGED: every message is now JSON with a "type", so read the type first
     socket.onmessage = (event) => {
-      if (replaying.current) return
-      applyingRemote.current = true
-      editor.setValue(event.data)
-      applyingRemote.current = false
+      const msg = JSON.parse(event.data)        // JSON text → object (like readValue in Java)
+
+      if (msg.type === "count") {               // NEW: player count update
+        setPlayerCount(Number(msg.text))
+        return
+      }
+
+      if (msg.type === "code") {
+        if (replaying.current) return
+        applyingRemote.current = true
+        editor.setValue(msg.text)               // the code is in msg.text
+        applyingRemote.current = false
+      }
     }
 
-    // the server closed our connection with code 4000 = "session ended" → go to replay.
-    // This also happens right away if you open a room that has already ended.
+    // server closed our connection with code 4000 = "session ended" → go to replay
     socket.onclose = (event) => {
       if (event.code === 4000) {
         enterReplay()
@@ -161,9 +168,10 @@ function App() {
     }
   }
 
+  // CHANGED: send { type: "code", text: ... } as JSON instead of plain code
   function handleChange(value: string | undefined) {
     if (applyingRemote.current || replaying.current) return
-    socketRef.current?.send(value ?? "")
+    socketRef.current?.send(JSON.stringify({ type: "code", text: value ?? "" }))   // object → JSON text
   }
 
   function formatTime(ms: number) {
@@ -190,6 +198,10 @@ function App() {
         <button onClick={handleNewRoom} style={buttonStyle}>New Room</button>
         {!inReplay && <button onClick={handleEndSession} style={buttonStyle}>End session</button>}
         {inReplay && <span style={{ fontSize: "18px" }}>Session ended: replay</span>}
+        {/* NEW: shows once the backend sends a count message */}
+        {!inReplay && playerCount !== null && (
+          <span style={{ fontSize: "18px" }}>👥 {playerCount} {playerCount === 1 ? "player" : "players"}</span>
+        )}
       </div>
 
       {inReplay && (

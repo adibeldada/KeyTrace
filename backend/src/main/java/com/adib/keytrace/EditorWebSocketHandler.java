@@ -1,8 +1,9 @@
 package com.adib.keytrace;
 
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 import java.util.List;
+import tools.jackson.databind.ObjectMapper;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -16,6 +17,8 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
     // Key (String): the room ID from the URL, e.g. "abc" in ?room=abc
     // Value (Room): that room's data: its sessions, latest code, snapshots, and ended status
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
+
+    private final ObjectMapper mapper = new ObjectMapper();
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -44,11 +47,17 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
 
         if (!room.getLatestCode().isEmpty()) {
             try {
-                session.sendMessage(new TextMessage(room.getLatestCode()));
+                EditorMessage out = new EditorMessage("code", room.getLatestCode());   // 1. build the object
+                String json = mapper.writeValueAsString(out);                         // 2. object → JSON text
+                session.sendMessage(new TextMessage(json));                           // 3. send the JSON
             } catch (Exception e) {
                 System.err.println("Error sending saved code to session: " + session.getId());
             }
         }
+
+        int count = room.getSessions().size(); 
+        EditorMessage msg = new EditorMessage("count",String.valueOf(count));
+        broadcast(room, msg);
     }
 
     @Override
@@ -66,9 +75,11 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
             return;   // session is over, so ignore any edits
         }
 
-        room.updateCode(message.getPayload()); // CHANGED: saves latest code AND records a snapshot
-
-        for (WebSocketSession s : room.getSessions()) {   // CHANGED: loop over the room's people
+        EditorMessage msg = mapper.readValue(message.getPayload(),EditorMessage.class);
+        
+        if ("code".equals(msg.type())){
+            room.updateCode(msg.text()); // CHANGED: saves latest code AND records a snapshot
+            for (WebSocketSession s : room.getSessions()) {   // CHANGED: loop over the room's people
             if (!s.getId().equals(session.getId()) && s.isOpen()) {
                 try {
                     s.sendMessage(message);
@@ -76,7 +87,9 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
                     System.err.println("Error sending to session: " + s.getId());
                 }
             }
+        }      
         }
+
     }
 
     @Override
@@ -95,7 +108,10 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         }
 
         room.removeSession(session);           // CHANGED: remove this person from the room
-        // CHANGED: no longer deleting empty rooms, so the recording stays for replay
+        int count = room.getSessions().size();
+        EditorMessage msg = new EditorMessage("count", String.valueOf(count));
+        broadcast(room, msg);
+
 
         System.out.println("disconnected: " + session.getId());
     }
@@ -123,6 +139,28 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
             } catch (Exception e) {
                 System.err.println("Error closing session: " + s.getId());
             }
+        }   
+
+    }
+
+    private void broadcast(Room room, EditorMessage msg){
+        String json;
+        try {
+            json = mapper.writeValueAsString(msg);
+        } catch (Exception e){
+            System.err.println("Error converting message to JSON");
+            return;
+        }
+
+        for (WebSocketSession s : room.getSessions()) {
+            if (s.isOpen()) {
+                try {
+                    s.sendMessage(new TextMessage(json));
+                 } catch (Exception e) {
+                System.err.println("Error sending to session: " + s.getId());
+            }
+            }
+        
         }   
     }
 
