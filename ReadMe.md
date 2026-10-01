@@ -40,12 +40,13 @@ KeyTrace is a web app for practicing coding interviews. Users solve problems in 
 
 ## Roadmap
 
+## Roadmap
+
 ### ✅ v0.1: Live collaboration
 - [x] Real-time shared editor (Spring Boot WebSockets + React/Monaco)
 - [x] Rooms with shareable links
 - [x] "New Room" button with random room IDs
 - [x] Late joiners receive current code
-- [x] Empty rooms cleaned up automatically
 
 ### ✅ v0.2: Recording & replay
 - [x] Keystroke recording with timestamps
@@ -56,25 +57,39 @@ KeyTrace is a web app for practicing coding interviews. Users solve problems in 
 - [x] Structured JSON messages with a `type` field
 - [x] Live player count
 - [x] Refactor room state into a `Room` class
+- [x] Rooms kept after everyone leaves, so sessions can be replayed
 
-### v0.4: Modes & roles
-- [x] Session modes: Solo, Interview/Training, Group
-- [ ] Host role (only the host can end the session)
-- [ ] Interviewer and candidate roles, private interviewer notes
-- [ ] Session timer
+### 🚧 v0.4: Modes & host
+- [x] Session modes: Solo, Interview, Group
+- [x] Player limits per mode (room full / room not found)
+- [x] Home screen to choose a mode
+- [ ] Host role via host token (only the host can end the session)
 
-### v0.5: Coding tools
+### v0.5: Quality
+- [ ] Unit tests (JUnit) for room logic
+- [ ] GitHub Actions CI
+
+### v0.6: Coding tools
 - [ ] Run code in a sandboxed Docker container
 - [ ] Problem panel with built-in practice problems
 
-### v0.6: Production-ready
+### v0.7: Accounts & persistence
 - [ ] PostgreSQL persistence (sessions survive restarts)
-- [ ] Tests (JUnit, Testcontainers) + GitHub Actions CI
+- [ ] User accounts (login)
+- [ ] Saved session history
+- [ ] Host linked to the logged-in creator (guests can still join by link)
+
+### v0.8: Interview features
+- [ ] Interviewer and candidate roles
+- [ ] Private interviewer notes
+- [ ] Session timer
+
+### v0.9: Deployment
 - [ ] Deploy to AWS
 
 ### Future ideas
 - [ ] Store edits as changes instead of full snapshots (smaller recordings)
 - [ ] Backend endpoint to fetch a single moment via binary search (for long sessions)
 - [ ] Conflict-free concurrent editing (sync engine) and live cursors
-- [ ] User accounts and saved session history
 - [ ] Session insights: time spent, longest pauses, paste detection
+- [ ] Room chat
