@@ -2,6 +2,7 @@ package com.adib.keytrace;
 
 import java.util.Map;
 import java.util.List;
+import java.util.UUID;
 import tools.jackson.databind.ObjectMapper;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Component;
@@ -22,41 +23,68 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
-        // runs when a browser connects
-        System.out.println("connected: " + session.getId()); // get the session id
-        String query = session.getUri().getQuery(); // get the query parameters from the URL
+        System.out.println("connected: " + session.getId());
+        String query = session.getUri().getQuery();
         if (query == null) {
             try {
                 session.close();
-            } catch (Exception e){
-                System.err.println("Error closing session" + session.getId());
+            } catch (Exception e) {
+                System.err.println("Error closing session: " + session.getId());
             }
             return;
         }
-        String roomId = query.split("=")[1]; // extract the room ID from the query parameters
-        Room room = rooms.computeIfAbsent(roomId, k -> new Room(roomId));
-        room.addSession(session);
-        if (room.isEnded()) {
+        String roomId = query.split("=")[1];
+
+        // 1. room must exist
+        Room room = rooms.get(roomId);
+        if (room == null) {
             try {
-                session.close(new CloseStatus(4000, "Session ended"));   // late visitor: send them to replay
+                session.close(new CloseStatus(4004, "Room not found"));
             } catch (Exception e) {
                 System.err.println("Error closing session: " + session.getId());
             }
             return;
         }
 
+        // 2. ended room → send them to the replay
+        if (room.isEnded()) {
+            try {
+                session.close(new CloseStatus(4000, "Session ended"));
+            } catch (Exception e) {
+                System.err.println("Error closing session: " + session.getId());
+            }
+            return;
+        }
+
+        // 3. full room → reject
+        int roomCount = room.getSessions().size();
+        int maxCount = room.getMode().getMaxPlayers();
+        if (roomCount >= maxCount) {
+            try {
+                session.close(new CloseStatus(4003, "Room full"));
+            } catch (Exception e) {
+                System.err.println("Error closing session: " + session.getId());
+            }
+            return;
+        }
+
+        // 4. all checks passed → join the room
+        room.addSession(session);
+
+        // 5. late joiner gets the current code
         if (!room.getLatestCode().isEmpty()) {
             try {
-                EditorMessage out = new EditorMessage("code", room.getLatestCode());   // 1. build the object
-                String json = mapper.writeValueAsString(out);                         // 2. object → JSON text
-                session.sendMessage(new TextMessage(json));                           // 3. send the JSON
+                EditorMessage out = new EditorMessage("code", room.getLatestCode());
+                String json = mapper.writeValueAsString(out);
+                session.sendMessage(new TextMessage(json));
             } catch (Exception e) {
                 System.err.println("Error sending saved code to session: " + session.getId());
             }
         }
 
-        int count = room.getSessions().size(); 
-        EditorMessage msg = new EditorMessage("count",String.valueOf(count));
+        // 6. tell everyone the new player count
+        int count = room.getSessions().size();
+        EditorMessage msg = new EditorMessage("count", String.valueOf(count));
         broadcast(room, msg);
     }
 
@@ -162,6 +190,13 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
             }
         
         }   
+    }
+
+    // Creates a new room with the chosen mode and returns its ID
+    public String createRoom(RoomMode mode) {
+        String roomId = UUID.randomUUID().toString().substring(0, 8);   // generate a random 8-character ID
+        rooms.put(roomId, new Room(roomId, mode));                      // create the room and store it
+        return roomId;                                                  // give the ID back to the controller
     }
 
 }

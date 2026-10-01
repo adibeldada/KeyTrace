@@ -12,12 +12,15 @@ public class Room {
     private final String roomId;
     private final Set<WebSocketSession> sessions = ConcurrentHashMap.newKeySet();
     private final List<Snapshot> snapshots = Collections.synchronizedList(new ArrayList<>());
+    private final RoomMode mode;
     private String latestCode = "";
     private boolean ended = false;
 
+
     // constructor (fixed: no "static")
-    public Room(String roomId) {
+    public Room(String roomId, RoomMode mode) {
         this.roomId = roomId;
+        this.mode = mode;
     }
 
     // ---------- people ----------
@@ -74,5 +77,11 @@ public class Room {
 
     public String getRoomId() {
         return roomId;
+    }
+
+    // -------- room mode ---------
+
+    public RoomMode getMode() {
+        return mode;
     }
 }

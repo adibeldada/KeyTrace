@@ -21,9 +21,11 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentMs, setCurrentMs] = useState(0)
   const [durationMs, setDurationMs] = useState(0)
-  const [playerCount, setPlayerCount] = useState<number | null>(null)   // NEW: players in the room
+  const [playerCount, setPlayerCount] = useState<number | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)   // NEW: "room full" etc.
 
-  const room = new URLSearchParams(window.location.search).get("room") ?? "test"
+  // CHANGED: no default room; if there's no ?room= we show the home screen
+  const room = new URLSearchParams(window.location.search).get("room")
 
   useEffect(() => {
     return () => {
@@ -33,8 +35,9 @@ function App() {
   }, [])
 
   // ---------- New Room ----------
-  async function handleNewRoom() {
-    const response = await fetch("http://localhost:8080/api/rooms", { method: "POST" })
+  // CHANGED: takes a mode, "SOLO" | "INTERVIEW" | "GROUP" (must match the Java enum names)
+  async function handleNewRoom(mode: string) {
+    const response = await fetch("http://localhost:8080/api/rooms?mode=" + mode, { method: "POST" })
     const newRoomId = await response.text()
     window.location.href = "/?room=" + newRoomId
   }
@@ -143,11 +146,10 @@ function App() {
 
     socket.onopen = () => console.log("connected to room " + room)
 
-    // CHANGED: every message is now JSON with a "type", so read the type first
     socket.onmessage = (event) => {
-      const msg = JSON.parse(event.data)        // JSON text → object (like readValue in Java)
+      const msg = JSON.parse(event.data)
 
-      if (msg.type === "count") {               // NEW: player count update
+      if (msg.type === "count") {
         setPlayerCount(Number(msg.text))
         return
       }
@@ -155,23 +157,22 @@ function App() {
       if (msg.type === "code") {
         if (replaying.current) return
         applyingRemote.current = true
-        editor.setValue(msg.text)               // the code is in msg.text
+        editor.setValue(msg.text)
         applyingRemote.current = false
       }
     }
 
-    // server closed our connection with code 4000 = "session ended" → go to replay
+    // CHANGED: handle all our custom close codes from the backend
     socket.onclose = (event) => {
-      if (event.code === 4000) {
-        enterReplay()
-      }
+      if (event.code === 4000) enterReplay()                                          // session ended
+      if (event.code === 4003) setErrorMessage("This room is full.")                  // room full
+      if (event.code === 4004) setErrorMessage("Room not found. Create a new room.")  // bad link / server restarted
     }
   }
 
-  // CHANGED: send { type: "code", text: ... } as JSON instead of plain code
   function handleChange(value: string | undefined) {
     if (applyingRemote.current || replaying.current) return
-    socketRef.current?.send(JSON.stringify({ type: "code", text: value ?? "" }))   // object → JSON text
+    socketRef.current?.send(JSON.stringify({ type: "code", text: value ?? "" }))
   }
 
   function formatTime(ms: number) {
@@ -191,18 +192,46 @@ function App() {
     cursor: "pointer",
   }
 
+  // NEW: the three "create a room" buttons, reused on both screens
+  const modeButtons = (
+    <>
+      <button onClick={() => handleNewRoom("SOLO")} style={buttonStyle}>New Solo</button>
+      <button onClick={() => handleNewRoom("INTERVIEW")} style={buttonStyle}>New Interview</button>
+      <button onClick={() => handleNewRoom("GROUP")} style={buttonStyle}>New Group</button>
+    </>
+  )
+
+  // NEW: home screen when there's no room in the URL
+  if (!room) {
+    return (
+      <div style={{ padding: "40px" }}>
+        <h1>KeyTrace</h1>
+        <p style={{ fontSize: "18px" }}>Practice coding interviews, then replay how you solved them.</p>
+        <p style={{ fontSize: "16px", opacity: 0.8 }}>
+          Solo: just you · Interview: 2 people · Group: up to 10
+        </p>
+        <div style={{ display: "flex", gap: "16px", marginTop: "20px" }}>{modeButtons}</div>
+      </div>
+    )
+  }
+
+  // room screen
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
         <h1>KeyTrace, room: {room}</h1>
-        <button onClick={handleNewRoom} style={buttonStyle}>New Room</button>
-        {!inReplay && <button onClick={handleEndSession} style={buttonStyle}>End session</button>}
+        {modeButtons}
+        {!inReplay && !errorMessage && (
+          <button onClick={handleEndSession} style={buttonStyle}>End session</button>
+        )}
         {inReplay && <span style={{ fontSize: "18px" }}>Session ended: replay</span>}
-        {/* NEW: shows once the backend sends a count message */}
         {!inReplay && playerCount !== null && (
           <span style={{ fontSize: "18px" }}>👥 {playerCount} {playerCount === 1 ? "player" : "players"}</span>
         )}
       </div>
+
+      {/* NEW: error message, e.g. room full or not found */}
+      {errorMessage && <p style={{ color: "#ff6b6b", fontSize: "18px" }}>{errorMessage}</p>}
 
       {inReplay && (
         <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "10px 0" }}>
@@ -222,15 +251,17 @@ function App() {
         </div>
       )}
 
-      <Editor
-        height="75vh"
-        defaultLanguage="python"
-        defaultValue="# start coding here"
-        theme="vs-dark"
-        onMount={handleMount}
-        onChange={handleChange}
-        options={{ readOnly: inReplay }}
-      />
+      {!errorMessage && (
+        <Editor
+          height="75vh"
+          defaultLanguage="python"
+          defaultValue="# start coding here"
+          theme="vs-dark"
+          onMount={handleMount}
+          onChange={handleChange}
+          options={{ readOnly: inReplay }}
+        />
+      )}
     </>
   )
 }

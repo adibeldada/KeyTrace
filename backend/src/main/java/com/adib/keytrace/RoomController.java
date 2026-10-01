@@ -2,6 +2,7 @@ package com.adib.keytrace;
 
 import java.util.UUID;
 import java.util.List;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,9 +20,9 @@ public class RoomController {
     }
 
     @PostMapping("/api/rooms")
-    public String createRoom() {
-        String roomId = UUID.randomUUID().toString().substring(0,8);   // generate a random unique ID
-        return roomId;
+    public String createRoom(@RequestParam String mode) {
+        RoomMode roomMode = RoomMode.valueOf(mode);   // "SOLO" → RoomMode.SOLO
+        return handler.createRoom(roomMode);          // create the room, return its ID
     }
 
     @GetMapping("/api/rooms/{roomId}/snapshots")
