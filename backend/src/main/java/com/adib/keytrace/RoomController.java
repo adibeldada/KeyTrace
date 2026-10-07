@@ -1,7 +1,8 @@
 package com.adib.keytrace;
 
-import java.util.UUID;
 import java.util.List;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,7 +21,7 @@ public class RoomController {
     }
 
     @PostMapping("/api/rooms")
-    public String createRoom(@RequestParam String mode) {
+    public CreatedRoom createRoom(@RequestParam String mode) {
         RoomMode roomMode = RoomMode.valueOf(mode);   // "SOLO" → RoomMode.SOLO
         return handler.createRoom(roomMode);          // create the room, return its ID
     }
@@ -32,7 +33,12 @@ public class RoomController {
     }
 
     @PostMapping("/api/rooms/{roomId}/end")
-    public void endSession(@PathVariable String roomId){
-        handler.endSession(roomId);
+    public ResponseEntity<Void> endSession(@PathVariable String roomId,
+                                        @RequestParam(required = false) String token) {
+        boolean ended = handler.endSession(roomId, token);
+        if (ended) {
+            return ResponseEntity.ok().build();                          // 200 OK
+        }
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).build();      // 403 Forbidden
     }
 }

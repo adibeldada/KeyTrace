@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 @Component
@@ -24,8 +25,8 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         System.out.println("connected: " + session.getId());
-        String query = session.getUri().getQuery();
-        if (query == null) {
+        String roomId = getParam(session, "room");
+        if (roomId == null) {
             try {
                 session.close();
             } catch (Exception e) {
@@ -33,7 +34,6 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
             }
             return;
         }
-        String roomId = query.split("=")[1];
 
         // 1. room must exist
         Room room = rooms.get(roomId);
@@ -71,6 +71,30 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         // 4. all checks passed → join the room
         room.addSession(session);
 
+        // 4b. is this the host? (their token matches the room's), if not the host make them a participant
+        if (getParam(session, "token") != null && getParam(session, "token").equals(room.getHostToken())){
+            room.setRole(session, Role.HOST);
+        } else {
+            room.setRole(session, Role.PARTICIPANT);
+        }
+
+        // 4c. tell this person their role, so the frontend can show it
+        String role;
+        if (room.isHost(session)) {
+            role = "HOST";
+        } else {
+            role = "PARTICIPANT";
+        }
+
+        try {
+            EditorMessage out = new EditorMessage("role", role);
+            String json = mapper.writeValueAsString(out);
+            session.sendMessage(new TextMessage(json));
+        } catch (Exception e) {
+            System.err.println("Error sending role to session: " + session.getId());
+        }
+        
+
         // 5. late joiner gets the current code
         if (!room.getLatestCode().isEmpty()) {
             try {
@@ -91,8 +115,11 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         System.out.println("message received: " + message.getPayload());
-        String query = session.getUri().getQuery();
-        String roomId = query.split("=")[1];
+        String roomId = getParam(session, "room");
+
+        if (roomId == null) {
+            return;
+        }
 
         Room room = rooms.get(roomId);        // CHANGED: find this person's room
         if (room == null) {
@@ -122,14 +149,13 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-        String query = session.getUri().getQuery();
+        String roomId = getParam(session, "room");
 
         // this session never joined a room, so there's nothing to clean up
-        if (query == null) {
+        if (roomId == null) {
             return;
         }
 
-        String roomId = query.split("=")[1];
         Room room = rooms.get(roomId);         // CHANGED: find the room
         if (room == null) {
             return;
@@ -153,10 +179,14 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
     }
 
     // Ends the session for everyone in the room: marks it ended and disconnects them all
-    public void endSession(String roomId) {
+    public boolean endSession(String roomId, String token) {
         Room room = rooms.get(roomId);
         if (room == null) {
-            return;                       // no such room, nothing to end
+            return false;                       // no such room, nothing to end
+        }
+
+        if (token == null || !token.equals(room.getHostToken())) {
+            return false;
         }
 
         room.end();                       // mark as ended first, so nothing new gets in
@@ -167,7 +197,9 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
             } catch (Exception e) {
                 System.err.println("Error closing session: " + s.getId());
             }
-        }   
+        }  
+
+        return true; 
 
     }
 
@@ -193,10 +225,21 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
     }
 
     // Creates a new room with the chosen mode and returns its ID
-    public String createRoom(RoomMode mode) {
+    public CreatedRoom createRoom(RoomMode mode) {
         String roomId = UUID.randomUUID().toString().substring(0, 8);   // generate a random 8-character ID
-        rooms.put(roomId, new Room(roomId, mode));                      // create the room and store it
-        return roomId;                                                  // give the ID back to the controller
+        String hostToken = UUID.randomUUID().toString();
+        rooms.put(roomId, new Room(roomId, mode, hostToken));                      // create the room and store it
+        return new CreatedRoom(roomId, hostToken);                                                  // give the ID back to the controller
+    }
+
+    // Reads one value from the WebSocket URL by name, e.g. "room" or "token".
+    // Returns null if that name isn't in the URL.
+    private String getParam(WebSocketSession session, String name) {
+        return UriComponentsBuilder
+                .fromUri(session.getUri())   // take the full URL
+                .build()                     // let Spring split it into parts
+                .getQueryParams()            // just the name=value pairs after "?"
+                .getFirst(name);             // the value for this name, or null
     }
 
 }
