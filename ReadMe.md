@@ -66,7 +66,7 @@ KeyTrace is a web app for practicing coding interviews. Users solve problems in 
 - [x] Host role via host token (only the host can end the session)
 
 ### v0.5: Quality
-- [ ] Unit tests (JUnit) for room logic
+- [x] Unit tests (JUnit) for room logic
 - [ ] GitHub Actions CI
 
 ### v0.6: Coding tools
