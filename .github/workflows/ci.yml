@@ -1,0 +1,29 @@
+name: CI
+
+# run on every push and every pull request
+on: [push, pull_request]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest          # GitHub gives us a fresh Linux machine
+
+    defaults:
+      run:
+        working-directory: backend  # run commands inside the backend folder
+
+    steps:
+      # 1. download your code onto the machine
+      - uses: actions/checkout@v5
+
+      # 2. install Java 17, and cache Maven downloads to speed up later runs
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      # 3. make the Maven wrapper runnable (files committed from Windows can lose this)
+      - run: chmod +x mvnw
+
+      # 4. run the tests (-B = plain output, better for logs)
+      - run: ./mvnw -B test
