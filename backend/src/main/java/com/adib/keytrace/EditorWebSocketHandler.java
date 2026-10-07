@@ -93,6 +93,16 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         } catch (Exception e) {
             System.err.println("Error sending role to session: " + session.getId());
         }
+
+        // 4d. tell this person the room's mode
+        String mode = room.getMode().name();
+        try {
+            EditorMessage out = new EditorMessage("mode", mode);
+            String json = mapper.writeValueAsString(out);
+            session.sendMessage(new TextMessage(json));
+        } catch (Exception e) {
+            System.err.println("Error sending mode to session: " + session.getId());
+        }
         
 
         // 5. late joiner gets the current code

@@ -24,7 +24,8 @@ function App() {
   const [durationMs, setDurationMs] = useState(0)
   const [playerCount, setPlayerCount] = useState<number | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)   // "room full" etc.
-  const [role, setRole] = useState<string | null>(null)                   // NEW: "HOST" or "PARTICIPANT", from the server
+  const [role, setRole] = useState<string | null>(null)                   // "HOST" or "PARTICIPANT", from the server
+  const [mode, setMode] = useState<string | null>(null)                   // NEW: mode, "SOLO" | "INTERVIEW" | "GROUP"
 
   // no default room; if there's no ?room= we show the home screen
   const room = new URLSearchParams(window.location.search).get("room")
@@ -154,7 +155,7 @@ function App() {
   function handleMount(editor: any) {
     editorRef.current = editor
 
-    // CHANGED: send our host token (if we have one) when joining
+    // send our host token (if we have one) when joining
     const token = localStorage.getItem("keytrace-host-" + room)   // our saved host token, or null
     let url = "ws://localhost:8080/ws?room=" + room
     if (token) {
@@ -168,9 +169,15 @@ function App() {
     socket.onmessage = (event) => {
       const msg = JSON.parse(event.data)
 
-      // NEW: the server tells us our role right after we join
+      // the server tells us our role right after we join
       if (msg.type === "role") {
         setRole(msg.text)
+        return
+      }
+
+      // NEW: mode, the server tells us the room's mode right after we join
+      if (msg.type === "mode") {
+        setMode(msg.text)
         return
       }
 
@@ -245,16 +252,24 @@ function App() {
     <>
       <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
         <h1>KeyTrace, room: {room}</h1>
+
+        {/* NEW: mode, show which kind of room this is */}
+        {mode && (
+          <span style={{ fontSize: "18px" }}>
+            {mode === "SOLO" ? "🧑 Solo" : mode === "INTERVIEW" ? "🎤 Interview" : "👥 Group"}
+          </span>
+        )}
+
         {modeButtons}
 
-        {/* CHANGED: only the host sees "End session" */}
+        {/* only the host sees "End session" */}
         {!inReplay && !errorMessage && role === "HOST" && (
           <button onClick={handleEndSession} style={buttonStyle}>End session</button>
         )}
 
         {inReplay && <span style={{ fontSize: "18px" }}>Session ended: replay</span>}
 
-        {/* NEW: show our role */}
+        {/* show our role */}
         {!inReplay && role && (
           <span style={{ fontSize: "18px" }}>{role === "HOST" ? "👑 Host" : "👤 Participant"}</span>
         )}
