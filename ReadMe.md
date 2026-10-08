@@ -59,7 +59,7 @@ KeyTrace is a web app for practicing coding interviews. Users solve problems in 
 - [x] Refactor room state into a `Room` class
 - [x] Rooms kept after everyone leaves, so sessions can be replayed
 
-### v0.4: Modes & host
+### ✅ v0.4: Modes & host
 - [x] Session modes: Solo, Interview, Group
 - [x] Player limits per mode (room full / room not found)
 - [x] Home screen to choose a mode
