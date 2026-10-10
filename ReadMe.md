@@ -45,41 +45,51 @@ KeyTrace is a web app for practicing coding interviews. Users solve problems in 
 - [x] Rooms with shareable links
 - [x] "New Room" button with random room IDs
 - [x] Late joiners receive current code
+
 ### ✅ v0.2: Recording & replay
 - [x] Keystroke recording with timestamps
 - [x] Session replay with timeline slider, play/pause and scrubbing
+
 ### ✅ v0.3: Sessions
 - [x] End session (ends for everyone in the room, switches to replay)
 - [x] Structured JSON messages with a `type` field
 - [x] Live player count
 - [x] Refactor room state into a `Room` class
 - [x] Rooms kept after everyone leaves, so sessions can be replayed
+
 ### ✅ v0.4: Modes & host
 - [x] Session modes: Solo, Interview, Group
 - [x] Player limits per mode (room full / room not found)
 - [x] Home screen to choose a mode
 - [x] Host role via host token (only the host can end the session)
+
 ### ✅ v0.5: Quality
 - [x] Unit tests (JUnit + Mockito) for room and handler logic
 - [x] GitHub Actions CI
-### v0.6: End-to-end tests
-- [ ] Playwright tests for the full app in real browsers (create room, host vs participant, live sync, ending a session)
-- [ ] Run Playwright tests in GitHub Actions
-### v0.7: Accounts & persistence
-- [ ] PostgreSQL persistence (sessions survive restarts)
+
+### v0.6: Persistence
+- [ ] PostgreSQL persistence (rooms and recordings survive restarts)
 - [ ] Integration tests against a real PostgreSQL database with Testcontainers
+
+### v0.7: Coding tools
+- [ ] Run code in a sandboxed Docker container
+- [ ] Problem panel with built-in practice problems
+
+### v0.8: Accounts
 - [ ] User accounts (login)
 - [ ] Saved session history
 - [ ] Host linked to the logged-in creator (guests can still join by link)
-### v0.8: Coding tools
-- [ ] Run code in a sandboxed Docker container
-- [ ] Problem panel with built-in practice problems
+
 ### v0.9: Interview features
 - [ ] Interviewer and candidate roles
 - [ ] Private interviewer notes
 - [ ] Session timer
-### v1.0: Deployment
+
+### v1.0: End-to-end tests & deployment
+- [ ] Playwright tests for the main flows (create room, host vs participant, live sync, ending a session, running code)
+- [ ] Run Playwright tests in GitHub Actions
 - [ ] Deploy to AWS
+
 ### Future ideas
 - [ ] Store edits as changes instead of full snapshots (smaller recordings)
 - [ ] Backend endpoint to fetch a single moment via binary search (for long sessions)

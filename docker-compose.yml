@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: keytrace-db
+    environment:
+      POSTGRES_DB: keytrace
+      POSTGRES_USER: keytrace
+      POSTGRES_PASSWORD: keytrace
+    ports:
+      - "5432:5432"
+    volumes:
+      - keytrace-data:/var/lib/postgresql/data
+
+volumes:
+  keytrace-data:

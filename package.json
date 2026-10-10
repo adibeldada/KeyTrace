@@ -4,7 +4,7 @@
   "description": "KeyTrace is a web app for practicing coding interviews. Users solve problems in a shared, browser-based code editor, problems can be solved either alone, with a friend or with a tutor that act as an interviewer. Every Keystroke is recorded, so after a session is done, the user can retrace their steps and watch exactly how they solved their problem to find their weaknesses, just like how athletes review game footage.",
   "main": "index.js",
   "scripts": {
-    "dev": "concurrently -n backend,frontend -c blue,green \"cd backend && mvnw spring-boot:run\" \"wait-on tcp:8080 && npm --prefix frontend run dev -- --open\""
+    "dev": "docker compose up -d && concurrently -n backend,frontend -c blue,green \"cd backend && mvnw spring-boot:run\" \"wait-on tcp:8080 && npm --prefix frontend run dev -- --open\""
   },
   "repository": {
     "type": "git",
