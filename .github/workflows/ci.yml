@@ -6,7 +6,20 @@ on: [push, pull_request]
 jobs:
   backend-tests:
     runs-on: ubuntu-latest          # GitHub gives us a fresh Linux machine
-
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: keytrace
+          POSTGRES_USER: keytrace
+          POSTGRES_PASSWORD: keytrace
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: backend  # run commands inside the backend folder
