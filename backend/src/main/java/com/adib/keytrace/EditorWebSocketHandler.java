@@ -3,6 +3,7 @@ package com.adib.keytrace;
 import java.util.Map;
 import java.util.List;
 import java.util.UUID;
+import java.util.ArrayList;
 import tools.jackson.databind.ObjectMapper;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Component;
@@ -15,12 +16,21 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 @Component
 public class EditorWebSocketHandler extends TextWebSocketHandler {
 
-    // All active rooms on the server.
+    // All live rooms on the server (in memory).
     // Key (String): the room ID from the URL, e.g. "abc" in ?room=abc
-    // Value (Room): that room's data: its sessions, latest code, snapshots, and ended status
+    // Value (Room): that room's live data: who's connected, their roles, latest code, ended status
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
 
     private final ObjectMapper mapper = new ObjectMapper();
+
+    private final RoomRepository roomRepository;            // v0.6: saves/loads rows in the "rooms" table
+    private final SnapshotRepository snapshotRepository;    // v0.6: saves/loads rows in the "snapshots" table
+
+    // Spring passes in the two repositories it created at startup
+    public EditorWebSocketHandler(RoomRepository roomRepository, SnapshotRepository snapshotRepository) {
+        this.roomRepository = roomRepository;
+        this.snapshotRepository = snapshotRepository;
+    }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -35,8 +45,8 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
-        // 1. room must exist
-        Room room = rooms.get(roomId);
+        // 1. room must exist (v0.6: in memory, or loaded back from the database after a restart)
+        Room room = findOrLoadRoom(roomId);
         if (room == null) {
             try {
                 session.close(new CloseStatus(4004, "Room not found"));
@@ -103,7 +113,6 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         } catch (Exception e) {
             System.err.println("Error sending mode to session: " + session.getId());
         }
-        
 
         // 5. late joiner gets the current code
         if (!room.getLatestCode().isEmpty()) {
@@ -131,7 +140,7 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
-        Room room = rooms.get(roomId);        // CHANGED: find this person's room
+        Room room = rooms.get(roomId);        // find this person's room (they joined, so it's in memory)
         if (room == null) {
             return;
         }
@@ -140,21 +149,26 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
             return;   // session is over, so ignore any edits
         }
 
-        EditorMessage msg = mapper.readValue(message.getPayload(),EditorMessage.class);
-        
-        if ("code".equals(msg.type())){
-            room.updateCode(msg.text()); // CHANGED: saves latest code AND records a snapshot
-            for (WebSocketSession s : room.getSessions()) {   // CHANGED: loop over the room's people
-            if (!s.getId().equals(session.getId()) && s.isOpen()) {
-                try {
-                    s.sendMessage(message);
-                } catch (Exception e) {
-                    System.err.println("Error sending to session: " + s.getId());
+        EditorMessage msg = mapper.readValue(message.getPayload(), EditorMessage.class);
+
+        if ("code".equals(msg.type())) {
+            room.updateCode(msg.text());                                                                   // in memory
+            snapshotRepository.save(new SnapshotRecord(roomId, msg.text(), System.currentTimeMillis()));   // v0.6: record this moment
+            roomRepository.findById(roomId).ifPresent(record -> {                                          // v0.6: update the saved latest code
+                record.setLatestCode(msg.text());
+                roomRepository.save(record);
+            });
+
+            for (WebSocketSession s : room.getSessions()) {   // send the edit to everyone else in the room
+                if (!s.getId().equals(session.getId()) && s.isOpen()) {
+                    try {
+                        s.sendMessage(message);
+                    } catch (Exception e) {
+                        System.err.println("Error sending to session: " + s.getId());
+                    }
                 }
             }
-        }      
         }
-
     }
 
     @Override
@@ -166,40 +180,47 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
-        Room room = rooms.get(roomId);         // CHANGED: find the room
+        Room room = rooms.get(roomId);
         if (room == null) {
             return;
         }
 
-        room.removeSession(session);           // CHANGED: remove this person from the room
+        room.removeSession(session);           // remove this person from the room
         int count = room.getSessions().size();
         EditorMessage msg = new EditorMessage("count", String.valueOf(count));
         broadcast(room, msg);
 
-
         System.out.println("disconnected: " + session.getId());
     }
 
+    // v0.6: gets a room's recording from the database, in time order
     public List<Snapshot> getSnapshot(String roomId) {
-        Room room = rooms.get(roomId);         // CHANGED: find the room
-        if (room == null) {
-            return List.of();                  // no such room: empty recording
+        List<SnapshotRecord> records = snapshotRepository.findByRoomIdOrderByTimestampAsc(roomId);
+
+        List<Snapshot> result = new ArrayList<>();
+        for (SnapshotRecord record : records) {
+            result.add(new Snapshot(record.getCode(), record.getTimestamp()));   // code → message, timestamp → currentTime
         }
-        return room.getSnapshots();            // CHANGED: the room holds its own recording
+        return result;
     }
 
     // Ends the session for everyone in the room: marks it ended and disconnects them all
     public boolean endSession(String roomId, String token) {
-        Room room = rooms.get(roomId);
+        Room room = findOrLoadRoom(roomId);   // v0.6: works after a restart too
         if (room == null) {
-            return false;                       // no such room, nothing to end
+            return false;                     // no such room, nothing to end
         }
 
         if (token == null || !token.equals(room.getHostToken())) {
-            return false;
+            return false;                     // only the host can end the session
         }
 
-        room.end();                       // mark as ended first, so nothing new gets in
+        room.end();                           // mark as ended first, so nothing new gets in
+
+        roomRepository.findById(roomId).ifPresent(record -> {   // v0.6: save "ended" in the database too
+            record.setEnded(true);
+            roomRepository.save(record);
+        });
 
         for (WebSocketSession s : room.getSessions()) {
             try {
@@ -207,17 +228,16 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
             } catch (Exception e) {
                 System.err.println("Error closing session: " + s.getId());
             }
-        }  
+        }
 
-        return true; 
-
+        return true;
     }
 
-    private void broadcast(Room room, EditorMessage msg){
+    private void broadcast(Room room, EditorMessage msg) {
         String json;
         try {
             json = mapper.writeValueAsString(msg);
-        } catch (Exception e){
+        } catch (Exception e) {
             System.err.println("Error converting message to JSON");
             return;
         }
@@ -226,20 +246,47 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
             if (s.isOpen()) {
                 try {
                     s.sendMessage(new TextMessage(json));
-                 } catch (Exception e) {
-                System.err.println("Error sending to session: " + s.getId());
+                } catch (Exception e) {
+                    System.err.println("Error sending to session: " + s.getId());
+                }
             }
-            }
-        
-        }   
+        }
     }
 
-    // Creates a new room with the chosen mode and returns its ID
+    // Creates a new room with the chosen mode and returns its ID and host token
     public CreatedRoom createRoom(RoomMode mode) {
-        String roomId = UUID.randomUUID().toString().substring(0, 8);   // generate a random 8-character ID
+        String roomId = UUID.randomUUID().toString().substring(0, 8);   // a random 8-character ID
         String hostToken = UUID.randomUUID().toString();
-        rooms.put(roomId, new Room(roomId, mode, hostToken));                      // create the room and store it
-        return new CreatedRoom(roomId, hostToken);                                                  // give the ID back to the controller
+        rooms.put(roomId, new Room(roomId, mode, hostToken));           // live room, in memory
+        roomRepository.save(new RoomRecord(roomId, mode, hostToken));   // v0.6: saved copy, in the database
+        return new CreatedRoom(roomId, hostToken);
+    }
+
+    // v0.6: finds a room in memory, or loads it from the database (e.g. after a restart).
+    // Returns null if the room doesn't exist anywhere.
+    private Room findOrLoadRoom(String roomId) {
+        // 1. look in memory
+        Room room = rooms.get(roomId);
+        if (room != null) {
+            return room;
+        }
+
+        // 2. not in memory, so look in the database
+        RoomRecord record = roomRepository.findById(roomId).orElse(null);
+        if (record == null) {
+            return null;                      // not in the database either: the room doesn't exist
+        }
+
+        // 3. rebuild the live room from its saved data
+        Room loaded = new Room(record.getRoomId(), record.getRoomMode(), record.getHostToken());
+        loaded.restoreLatestCode(record.getLatestCode());
+        if (record.getEnded()) {
+            loaded.end();
+        }
+
+        // 4. keep it in memory, so next time step 1 finds it
+        rooms.put(roomId, loaded);
+        return loaded;
     }
 
     // Reads one value from the WebSocket URL by name, e.g. "room" or "token".
@@ -251,5 +298,4 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
                 .getQueryParams()            // just the name=value pairs after "?"
                 .getFirst(name);             // the value for this name, or null
     }
-
 }

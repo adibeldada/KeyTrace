@@ -1,16 +1,22 @@
 package com.adib.keytrace;
 
 import static org.junit.jupiter.api.Assertions.*;   // assertTrue, assertEquals, ...
+import static org.mockito.Mockito.mock;             // fake repositories
 import org.junit.jupiter.api.Test;                  // the @Test label
 
 class EditorWebSocketHandlerTest {
+
+    // a handler with fake (mock) repositories, so no real database is needed
+    private EditorWebSocketHandler newHandler() {
+        return new EditorWebSocketHandler(mock(RoomRepository.class), mock(SnapshotRepository.class));
+    }
 
     // ---------- creating rooms ----------
 
     @Test
     void createRoomReturnsIdAndToken() {
         // Arrange
-        EditorWebSocketHandler handler = new EditorWebSocketHandler();
+        EditorWebSocketHandler handler = newHandler();
 
         // Act
         CreatedRoom created = handler.createRoom(RoomMode.SOLO);
@@ -23,7 +29,7 @@ class EditorWebSocketHandlerTest {
 
     @Test
     void eachRoomGetsItsOwnToken() {
-        EditorWebSocketHandler handler = new EditorWebSocketHandler();
+        EditorWebSocketHandler handler = newHandler();
 
         CreatedRoom first = handler.createRoom(RoomMode.GROUP);
         CreatedRoom second = handler.createRoom(RoomMode.GROUP);
@@ -36,7 +42,7 @@ class EditorWebSocketHandlerTest {
 
     @Test
     void endSessionWithCorrectTokenSucceeds() {
-        EditorWebSocketHandler handler = new EditorWebSocketHandler();
+        EditorWebSocketHandler handler = newHandler();
         CreatedRoom created = handler.createRoom(RoomMode.INTERVIEW);
 
         boolean ended = handler.endSession(created.roomId(), created.hostToken());
@@ -46,7 +52,7 @@ class EditorWebSocketHandlerTest {
 
     @Test
     void endSessionWithWrongTokenIsRefused() {
-        EditorWebSocketHandler handler = new EditorWebSocketHandler();
+        EditorWebSocketHandler handler = newHandler();
         CreatedRoom created = handler.createRoom(RoomMode.INTERVIEW);
 
         boolean ended = handler.endSession(created.roomId(), "wrong-token");
@@ -56,7 +62,7 @@ class EditorWebSocketHandlerTest {
 
     @Test
     void endSessionWithNoTokenIsRefused() {
-        EditorWebSocketHandler handler = new EditorWebSocketHandler();
+        EditorWebSocketHandler handler = newHandler();
         CreatedRoom created = handler.createRoom(RoomMode.INTERVIEW);
 
         // a participant's browser has no token, so it sends null
@@ -67,7 +73,7 @@ class EditorWebSocketHandlerTest {
 
     @Test
     void endSessionForUnknownRoomIsRefused() {
-        EditorWebSocketHandler handler = new EditorWebSocketHandler();
+        EditorWebSocketHandler handler = newHandler();
 
         boolean ended = handler.endSession("no-such-room", "any-token");
 

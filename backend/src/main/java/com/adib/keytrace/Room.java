@@ -26,6 +26,13 @@ public class Room {
         this.hostToken = hostToken;
     }
 
+    // used when loading a room from the database after a restart:
+    // sets the code without recording a new snapshot
+    public void restoreLatestCode(String code) {
+        latestCode = code;
+    }
+
+
     // ---------- people ----------
 
     // everyone joins as a participant; the handler upgrades the host with setRole
