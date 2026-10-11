@@ -68,7 +68,7 @@ KeyTrace is a web app for practicing coding interviews. Users solve problems in 
 - [x] GitHub Actions CI
 
 ### v0.6: Persistence
-- [ ] PostgreSQL persistence (rooms and recordings survive restarts)
+- [x] PostgreSQL persistence (rooms and recordings survive restarts)
 - [ ] Integration tests against a real PostgreSQL database with Testcontainers
 
 ### v0.7: Coding tools
