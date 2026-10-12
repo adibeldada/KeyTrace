@@ -5,21 +5,8 @@ on: [push, pull_request]
 
 jobs:
   backend-tests:
-    runs-on: ubuntu-latest          # GitHub gives us a fresh Linux machine
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_DB: keytrace
-          POSTGRES_USER: keytrace
-          POSTGRES_PASSWORD: keytrace
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    runs-on: ubuntu-latest          # GitHub gives us a fresh Linux machine (it has Docker, so Testcontainers works)
+
     defaults:
       run:
         working-directory: backend  # run commands inside the backend folder
@@ -38,5 +25,6 @@ jobs:
       # 3. make the Maven wrapper runnable (files committed from Windows can lose this)
       - run: chmod +x mvnw
 
-      # 4. run the tests (-B = plain output, better for logs)
+      # 4. run the tests (-B = plain output, better for logs).
+      #    Testcontainers starts its own throwaway PostgreSQL in Docker for the tests.
       - run: ./mvnw -B test
