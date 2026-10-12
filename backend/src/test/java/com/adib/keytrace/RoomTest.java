@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;   // assertFalse, assertEquals
 import static org.mockito.Mockito.mock;             // mock(...)
 import org.junit.jupiter.api.Test;                  // the @Test label
 import org.springframework.web.socket.WebSocketSession;
+import com.adib.keytrace.room.Role;
+import com.adib.keytrace.room.Room;
+import com.adib.keytrace.room.RoomMode;
 
 class RoomTest {
 

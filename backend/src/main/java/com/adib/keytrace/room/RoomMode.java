@@ -1,4 +1,4 @@
-package com.adib.keytrace;
+package com.adib.keytrace.room;
 
 public enum RoomMode {
     SOLO(1),

@@ -1,4 +1,4 @@
-package com.adib.keytrace;
+package com.adib.keytrace.persistence;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 

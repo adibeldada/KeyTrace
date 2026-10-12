@@ -1,4 +1,4 @@
-package com.adib.keytrace;
+package com.adib.keytrace.persistence;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -6,6 +6,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import com.adib.keytrace.room.RoomMode;
 
 @Entity
 @Table(name = "rooms")

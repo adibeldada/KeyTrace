@@ -1,4 +1,4 @@
-package com.adib.keytrace;
+package com.adib.keytrace.persistence;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
