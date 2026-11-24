@@ -1,0 +1,6 @@
+/* another person's cursor in the editor */
+.remote-cursor {
+  position: absolute;
+  height: 100%;
+  border-left: 2px solid #ff9800;   /* orange line */
+}

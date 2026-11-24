@@ -145,7 +145,7 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         EditorMessage msg = mapper.readValue(message.getPayload(), EditorMessage.class);
 
         if ("code".equals(msg.type())) {
-            roomService.recordCode(room, msg.text());   // update the room, record the moment, save to the database
+            roomService.recordCode(room, msg.text());   // update the room, record the moment, save to the database   
 
             for (WebSocketSession s : room.getSessions()) {   // send the edit to everyone else in the room
                 if (!s.getId().equals(session.getId()) && s.isOpen()) {
@@ -157,6 +157,12 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
                 }
             }
         }
+
+        if ("cursor".equals(msg.type())) {
+            // add WHO sent it, so others know whose cursor this is: "abc:4:10"
+            EditorMessage out = new EditorMessage("cursor", session.getId() + ":" + msg.text());
+            broadcastExcept(room, session, out);   // just forward it: no recordCode, no database
+        } 
     }
 
     @Override
@@ -177,6 +183,7 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         int count = room.getSessions().size();
         EditorMessage msg = new EditorMessage("count", String.valueOf(count));
         broadcast(room, msg);
+        broadcast(room, new EditorMessage("cursor-leave", session.getId()));   // others remove this person's cursor
 
         System.out.println("disconnected: " + session.getId());
     }
@@ -202,6 +209,27 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    // Sends one message to everyone in the room except the sender
+    private void broadcastExcept(Room room, WebSocketSession sender, EditorMessage msg) {
+        String json;
+        try {
+            json = mapper.writeValueAsString(msg);
+        } catch (Exception e) {
+            System.err.println("Error converting message to JSON");
+            return;
+        }
+
+        for (WebSocketSession s : room.getSessions()) {
+            if (!s.getId().equals(sender.getId()) && s.isOpen()) {
+                try {
+                    s.sendMessage(new TextMessage(json));
+                } catch (Exception e) {
+                    System.err.println("Error sending to session: " + s.getId());
+                }
+            }
+        }
+    }
+
     // Reads one value from the WebSocket URL by name, e.g. "room" or "token".
     // Returns null if that name isn't in the URL.
     private String getParam(WebSocketSession session, String name) {
@@ -211,4 +239,6 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
                 .getQueryParams()            // just the name=value pairs after "?"
                 .getFirst(name);             // the value for this name, or null
     }
+
+   
 }

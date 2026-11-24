@@ -1,45 +1,46 @@
 # Status: IN PROGRESS
 
 # KeyTrace
- 
+
 ## Overview
 
-KeyTrace is a web app for practicing coding interviews. Users solve problems in a shared, browser-based code editor, problems can be solved either alone, with a friend or with a tutor that act as an interviewer. Every Keystroke is recorded, so after a session is done, the user can retrace their steps and watch exactly how they solved their problem to find their weaknesses, just like how athletes review game footage. 
-
-# Key Features
+KeyTrace is a web app for practicing coding interviews. Users solve problems in a shared, browser-based code editor, either alone, with a friend, or with a tutor acting as the interviewer. Every keystroke is recorded, so after a session the user can retrace their steps and watch exactly how they solved the problem to find their weaknesses, just like athletes reviewing game footage.
 
 ## Features
 
-### Core (in progress)
-
+### Built
 - Create a session room and share it with a link
-- Live shared code editor with real-time cursors
-- Built-in practice problems, or add your own
-- Run code in a secure sandbox with shared output
+- Live shared code editor
+- Session modes (Solo, Interview, Group) with a host who controls the session
 - Every keystroke recorded with timestamps
 - Replay sessions with play, pause, speed control and scrubbing
+- Rooms and recordings saved in PostgreSQL, so they survive restarts
+
+### In progress
+- Live collaborator cursors
+- Run code in a secure sandbox with shared output
+- Built-in practice problems
 
 ### Planned
-
 - User accounts and saved session history
 - Countdown timer
 - Built-in KeyTrace AI that analyzes performance
 - Session breakdown: time spent reading, coding, and debugging
-- paste detection for large blocks of code
-- room chat
+- Paste detection for large blocks of code
+- Room chat
 
-### Tech Stack
+## Tech Stack
 
 - **Frontend:** React, TypeScript, Monaco Editor
 - **Backend:** Java, Spring Boot, WebSockets
-- **Database:** PostgreSQL
-- **Code Execution:** Docker (sandboxed containers)
-- **Testing:** JUnit, Testcontainers, Playwright
+- **Database:** PostgreSQL (Spring Data JPA)
+- **Code Execution:** Docker sandboxed containers (in progress)
+- **Testing:** JUnit, Mockito, Testcontainers, Playwright (planned)
 - **CI/CD:** GitHub Actions
 - **Deployment:** AWS (planned)
 
 ## Roadmap
- 
+
 ### ✅ v0.1: Live collaboration
 - [x] Real-time shared editor (Spring Boot WebSockets + React/Monaco)
 - [x] Rooms with shareable links
@@ -71,9 +72,11 @@ KeyTrace is a web app for practicing coding interviews. Users solve problems in 
 - [x] PostgreSQL persistence (rooms and recordings survive restarts)
 - [x] Refactor: split room logic into a `RoomService` and organize code into packages
 - [x] Integration tests against a real PostgreSQL database with Testcontainers
+- [x] Cut database queries per keystroke from 4 to 2 (direct update + one transaction)
 
 ### v0.7: Coding tools
-- [ ] Run code in a sandboxed Docker container
+- [x] Live collaborator cursors
+- [ ] Run code in a sandboxed Docker container (no network, CPU/memory/time limits)
 - [ ] Problem panel with built-in practice problems
 
 ### v0.8: Accounts
@@ -91,10 +94,15 @@ KeyTrace is a web app for practicing coding interviews. Users solve problems in 
 - [ ] Run Playwright tests in GitHub Actions
 - [ ] Deploy to AWS
 
-### Future ideas
+### Performance (measured in BENCHMARKS.md)
+- [ ] Benchmarks: sync latency, load test, recording size and replay load time
+- [ ] Index snapshots by room
+- [ ] Batch snapshot writes instead of one insert per keystroke
 - [ ] Store edits as changes instead of full snapshots (smaller recordings)
-- [ ] Backend endpoint to fetch a single moment via binary search (for long sessions)
-- [ ] Conflict-free concurrent editing (sync engine) and live cursors
+- [ ] Load long replays in pages, or fetch a single moment from the backend
+
+### Future ideas
+- [ ] Conflict-free concurrent editing (sync engine)
 - [ ] Session insights: time spent, longest pauses, paste detection
+- [ ] User-added practice problems
 - [ ] Room chat
- 

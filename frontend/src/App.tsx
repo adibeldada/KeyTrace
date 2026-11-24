@@ -27,6 +27,7 @@ function App() {
   const [role, setRole] = useState<string | null>(null)                   // "HOST" or "PARTICIPANT", from the server
   const [mode, setMode] = useState<string | null>(null)                   // NEW: mode, "SOLO" | "INTERVIEW" | "GROUP"
 
+  const remoteCursors = useRef<Record<string, any>>({})   // other people's cursors: session id → their drawn cursor
   // no default room; if there's no ?room= we show the home screen
   const room = new URLSearchParams(window.location.search).get("room")
 
@@ -105,6 +106,9 @@ function App() {
   async function enterReplay() {
     if (replaying.current) return
     replaying.current = true
+
+    Object.values(remoteCursors.current).forEach((c: any) => c.clear())   // no live cursors in replay
+    remoteCursors.current = {}
 
     const response = await fetch("http://localhost:8080/api/rooms/" + room + "/snapshots")
     const data: Snapshot[] = await response.json()
@@ -186,10 +190,39 @@ function App() {
         return
       }
 
+      // someone else moved their cursor: "abc:4:10" → draw it at line 4, column 10
+      if (msg.type === "cursor") {
+        if (replaying.current) return
+        const [id, line, column] = msg.text.split(":")
+        const l = Number(line)
+        const c = Number(column)
+
+        // first time we see this person → make a drawing slot for them
+        if (!remoteCursors.current[id]) {
+          remoteCursors.current[id] = editor.createDecorationsCollection()
+        }
+
+        // draw (or move) their cursor at that spot
+        remoteCursors.current[id].set([{
+          range: { startLineNumber: l, startColumn: c, endLineNumber: l, endColumn: c },
+          options: { beforeContentClassName: "remote-cursor" },
+        }])
+        return
+      }
+
+      // someone left: remove their cursor
+      if (msg.type === "cursor-leave") {
+        remoteCursors.current[msg.text]?.clear()
+        delete remoteCursors.current[msg.text]
+        return
+      }
+
       if (msg.type === "code") {
         if (replaying.current) return
         applyingRemote.current = true
-        editor.setValue(msg.text)
+        const position = editor.getPosition()        // remember where my cursor is
+        editor.setValue(msg.text)                    // replace the text (this resets the cursor)
+        if (position) editor.setPosition(position)   // put my cursor back
         applyingRemote.current = false
       }
     }
@@ -200,6 +233,14 @@ function App() {
       if (event.code === 4003) setErrorMessage("This room is full.")                  // room full
       if (event.code === 4004) setErrorMessage("Room not found. Create a new room.")  // bad link / server restarted
     }
+
+    editor.onDidChangeCursorPosition((e: any) => {
+      if (applyingRemote.current || replaying.current) return   // not a real move by me
+      if (socket.readyState !== WebSocket.OPEN) return          // not connected yet
+      const line = e.position.lineNumber
+      const column = e.position.column
+      socket.send(JSON.stringify({ type: "cursor", text: line + ":" + column }))
+    })
   }
 
   function handleChange(value: string | undefined) {
