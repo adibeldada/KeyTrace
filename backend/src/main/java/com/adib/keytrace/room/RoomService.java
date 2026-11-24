@@ -13,6 +13,7 @@ import com.adib.keytrace.persistence.RoomRecord;
 import com.adib.keytrace.persistence.RoomRepository;
 import com.adib.keytrace.persistence.SnapshotRecord;
 import com.adib.keytrace.persistence.SnapshotRepository;
+import org.springframework.transaction.annotation.Transactional;
 
 // All the room logic in one place: the live rooms in memory, and saving/loading them in the database.
 // Both the WebSocket handler and the controller use this class.
@@ -73,13 +74,11 @@ public class RoomService {
     }
 
     // Someone typed: update the live room, record the moment, and save the latest code
+    @Transactional
     public void recordCode(Room room, String code) {
-        room.updateCode(code);                                                                        // in memory
-        snapshotRepository.save(new SnapshotRecord(room.getRoomId(), code, System.currentTimeMillis())); // record this moment
-        roomRepository.findById(room.getRoomId()).ifPresent(record -> {                               // update the saved latest code
-            record.setLatestCode(code);
-            roomRepository.save(record);
-        });
+        room.updateCode(code);                                                                  // 1. memory (no database)
+        snapshotRepository.save(new SnapshotRecord(room.getRoomId(), code, System.currentTimeMillis())); // 2. new row in snapshots
+        roomRepository.updateLatestCode(room.getRoomId(), code);                                // 3. latest_code in rooms
     }
 
     // Gets a room's recording from the database, in time order
