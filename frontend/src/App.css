@@ -4,3 +4,17 @@
   height: 100%;
   border-left: 2px solid #ff9800;   /* orange line */
 }
+/* our main button */
+.button {
+  font-size: 18px;
+  padding: 10px 20px;
+  background-color: #66251e;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.button:hover {
+  background-color: #7d2e25;   /* a bit lighter on hover */
+}

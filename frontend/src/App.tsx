@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import Editor from '@monaco-editor/react'
 import './App.css'
-
-type Snapshot = { message: string; currentTime: number }
-type CreatedRoom = { roomId: string; hostToken: string }
+import { endSession, getSnapshots, roomSocketUrl, type Snapshot } from './api/api'
+import HomeScreen from './components/HomeScreen'
+import ModeButtons from './components/ModeButtons'
 
 function App() {
   const socketRef = useRef<WebSocket | null>(null)
@@ -38,30 +38,12 @@ function App() {
     }
   }, [])
 
-  // ---------- New Room ----------
-  // takes a mode, "SOLO" | "INTERVIEW" | "GROUP" (must match the Java enum names)
-  async function handleNewRoom(mode: string) {
-    const response = await fetch("http://localhost:8080/api/rooms?mode=" + mode, { method: "POST" })
-    const data: CreatedRoom = await response.json()
-    localStorage.setItem("keytrace-host-" + data.roomId, data.hostToken)   // save our host "key card"
-    window.location.href = "/?room=" + data.roomId
-  }
-
   // ---------- End session ----------
   async function handleEndSession() {
     const sure = window.confirm("End the session for everyone in this room?")
     if (!sure) return
-
-    const token = localStorage.getItem("keytrace-host-" + room)   // our host token, or null
-
-    const response = await fetch(
-      "http://localhost:8080/api/rooms/" + room + "/end?token=" + token,   // send the token as proof
-      { method: "POST" }
-    )
-
-    if (!response.ok) {                                           // 403 = not the host
-      alert("Only the host can end the session.")
-    }
+    const ok = await endSession(room!)
+    if (!ok) alert("Only the host can end the session.")   // 403 = not the host
   }
 
   // ---------- Replay helpers ----------
@@ -110,8 +92,7 @@ function App() {
     Object.values(remoteCursors.current).forEach((c: any) => c.clear())   // no live cursors in replay
     remoteCursors.current = {}
 
-    const response = await fetch("http://localhost:8080/api/rooms/" + room + "/snapshots")
-    const data: Snapshot[] = await response.json()
+    const data = await getSnapshots(room!)
 
     snapshotsRef.current = data
     shownIndexRef.current = -1
@@ -159,13 +140,7 @@ function App() {
   function handleMount(editor: any) {
     editorRef.current = editor
 
-    // send our host token (if we have one) when joining
-    const token = localStorage.getItem("keytrace-host-" + room)   // our saved host token, or null
-    let url = "ws://localhost:8080/ws?room=" + room
-    if (token) {
-      url = url + "&token=" + token                               // only hosts have one
-    }
-    const socket = new WebSocket(url)
+    const socket = new WebSocket(roomSocketUrl(room!))   // adds our host token if we have one
     socketRef.current = socket
 
     socket.onopen = () => console.log("connected to room " + room)
@@ -255,37 +230,9 @@ function App() {
     return minutes + ":" + String(seconds).padStart(2, "0")
   }
 
-  const buttonStyle = {
-    fontSize: "18px",
-    padding: "10px 20px",
-    backgroundColor: "#66251e",
-    color: "white",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-  }
-
-  // the three "create a room" buttons, reused on both screens
-  const modeButtons = (
-    <>
-      <button onClick={() => handleNewRoom("SOLO")} style={buttonStyle}>New Solo</button>
-      <button onClick={() => handleNewRoom("INTERVIEW")} style={buttonStyle}>New Interview</button>
-      <button onClick={() => handleNewRoom("GROUP")} style={buttonStyle}>New Group</button>
-    </>
-  )
-
   // home screen when there's no room in the URL
   if (!room) {
-    return (
-      <div style={{ padding: "40px" }}>
-        <h1>KeyTrace</h1>
-        <p style={{ fontSize: "18px" }}>Practice coding interviews, then replay how you solved them.</p>
-        <p style={{ fontSize: "16px", opacity: 0.8 }}>
-          Solo: just you · Interview: 2 people · Group: up to 10
-        </p>
-        <div style={{ display: "flex", gap: "16px", marginTop: "20px" }}>{modeButtons}</div>
-      </div>
-    )
+    return <HomeScreen />
   }
 
   // room screen
@@ -301,11 +248,11 @@ function App() {
           </span>
         )}
 
-        {modeButtons}
+        <ModeButtons />
 
         {/* only the host sees "End session" */}
         {!inReplay && !errorMessage && role === "HOST" && (
-          <button onClick={handleEndSession} style={buttonStyle}>End session</button>
+          <button onClick={handleEndSession} className="button">End session</button>
         )}
 
         {inReplay && <span style={{ fontSize: "18px" }}>Session ended: replay</span>}
@@ -325,7 +272,7 @@ function App() {
 
       {inReplay && (
         <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "10px 0" }}>
-          <button onClick={togglePlay} style={{ ...buttonStyle, width: "130px" }}>
+          <button onClick={togglePlay} className="button" style={{ width: "130px" }}>
             {isPlaying ? "⏸ Pause" : "▶ Play"}
           </button>
           <span>{formatTime(currentMs)}</span>
