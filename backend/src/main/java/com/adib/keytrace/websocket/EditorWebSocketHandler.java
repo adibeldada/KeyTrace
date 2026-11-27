@@ -10,6 +10,8 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import com.adib.keytrace.room.Role;
 import com.adib.keytrace.room.Room;
 import com.adib.keytrace.room.RoomService;
+import com.adib.keytrace.sandbox.RunResult;
+import com.adib.keytrace.sandbox.SandboxService;
 
 // Handles the live WebSocket side of a room: people joining, typing, and leaving.
 // Anything about rooms or the database is done by RoomService.
@@ -18,11 +20,13 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
-    private final RoomService roomService;   // finds, loads, and saves rooms
+    private final RoomService roomService;         // finds, loads, and saves rooms
+    private final SandboxService sandboxService;   // runs code in Docker
 
-    // Spring passes in the RoomService it created at startup
-    public EditorWebSocketHandler(RoomService roomService) {
+    // Spring passes in the services it created at startup
+    public EditorWebSocketHandler(RoomService roomService, SandboxService sandboxService) {
         this.roomService = roomService;
+        this.sandboxService = sandboxService;
     }
 
     @Override
@@ -163,6 +167,20 @@ public class EditorWebSocketHandler extends TextWebSocketHandler {
             EditorMessage out = new EditorMessage("cursor", session.getId() + ":" + msg.text());
             broadcastExcept(room, session, out);   // just forward it: no recordCode, no database
         } 
+
+        if ("run".equals(msg.type())) {
+            broadcast(room, new EditorMessage("running", ""));
+
+            RunResult result;
+            try {
+                result = sandboxService.runPython(msg.text());
+            } catch (Exception e) {
+                result = new RunResult("Could not run code: " + e.getMessage(), -1, false);
+            }
+
+            String json = mapper.writeValueAsString(result); 
+            broadcast(room, new EditorMessage("output", json));
+        }
     }
 
     @Override

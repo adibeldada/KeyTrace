@@ -4,6 +4,7 @@ import './App.css'
 import { endSession, getSnapshots, roomSocketUrl, type Snapshot } from './api/api'
 import HomeScreen from './components/HomeScreen'
 import ModeButtons from './components/ModeButtons'
+import OutputPanel, { type RunResult } from './components/OutputPanel'   // NEW: run
 
 function App() {
   const socketRef = useRef<WebSocket | null>(null)
@@ -25,7 +26,9 @@ function App() {
   const [playerCount, setPlayerCount] = useState<number | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)   // "room full" etc.
   const [role, setRole] = useState<string | null>(null)                   // "HOST" or "PARTICIPANT", from the server
-  const [mode, setMode] = useState<string | null>(null)                   // NEW: mode, "SOLO" | "INTERVIEW" | "GROUP"
+  const [running, setRunning] = useState(false)                           // NEW: run, is code running in the sandbox right now?
+  const [runResult, setRunResult] = useState<RunResult | null>(null)      // NEW: run, the last run's output
+  const [mode, setMode] = useState<string | null>(null)                   // "SOLO" | "INTERVIEW" | "GROUP"
 
   const remoteCursors = useRef<Record<string, any>>({})   // other people's cursors: session id → their drawn cursor
   // no default room; if there's no ?room= we show the home screen
@@ -154,9 +157,22 @@ function App() {
         return
       }
 
-      // NEW: mode, the server tells us the room's mode right after we join
+      // the server tells us the room's mode right after we join
       if (msg.type === "mode") {
         setMode(msg.text)
+        return
+      }
+
+      // NEW: run, someone clicked Run: show "Running…" for everyone
+      if (msg.type === "running") {
+        setRunning(true)
+        return
+      }
+
+      // NEW: run, the run finished: msg.text is the RunResult as JSON
+      if (msg.type === "output") {
+        setRunning(false)
+        setRunResult(JSON.parse(msg.text))
         return
       }
 
@@ -209,6 +225,7 @@ function App() {
       if (event.code === 4004) setErrorMessage("Room not found. Create a new room.")  // bad link / server restarted
     }
 
+    // every time MY cursor moves, tell the server where it is ("line:column")
     editor.onDidChangeCursorPosition((e: any) => {
       if (applyingRemote.current || replaying.current) return   // not a real move by me
       if (socket.readyState !== WebSocket.OPEN) return          // not connected yet
@@ -216,6 +233,12 @@ function App() {
       const column = e.position.column
       socket.send(JSON.stringify({ type: "cursor", text: line + ":" + column }))
     })
+  }
+
+  // NEW: run, send the editor's code to the backend to run in the sandbox
+  function handleRun() {
+    const code = editorRef.current?.getValue() ?? ""
+    socketRef.current?.send(JSON.stringify({ type: "run", text: code }))
   }
 
   function handleChange(value: string | undefined) {
@@ -241,7 +264,7 @@ function App() {
       <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
         <h1>KeyTrace, room: {room}</h1>
 
-        {/* NEW: mode, show which kind of room this is */}
+        {/* show which kind of room this is */}
         {mode && (
           <span style={{ fontSize: "18px" }}>
             {mode === "SOLO" ? "🧑 Solo" : mode === "INTERVIEW" ? "🎤 Interview" : "👥 Group"}
@@ -249,6 +272,13 @@ function App() {
         )}
 
         <ModeButtons />
+
+        {/* NEW: run, anyone in a live room can run the code */}
+        {!inReplay && !errorMessage && (
+          <button onClick={handleRun} className="button" disabled={running}>
+            {running ? "⏳ Running…" : "▶ Run"}
+          </button>
+        )}
 
         {/* only the host sees "End session" */}
         {!inReplay && !errorMessage && role === "HOST" && (
@@ -290,7 +320,7 @@ function App() {
 
       {!errorMessage && (
         <Editor
-          height="75vh"
+          height="60vh"
           defaultLanguage="python"
           defaultValue="# start coding here"
           theme="vs-dark"
@@ -299,6 +329,9 @@ function App() {
           options={{ readOnly: inReplay }}
         />
       )}
+
+      {/* NEW: run, what the code printed (live rooms only) */}
+      {!inReplay && !errorMessage && <OutputPanel running={running} result={runResult} />}
     </>
   )
 }

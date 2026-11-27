@@ -76,7 +76,7 @@ KeyTrace is a web app for practicing coding interviews. Users solve problems in 
 
 ### v0.7: Coding tools
 - [x] Live collaborator cursors
-- [ ] Run code in a sandboxed Docker container (no network, CPU/memory/time limits)
+- [x] Run code in a sandboxed Docker container (no network, CPU/memory/time limits)
 - [ ] Problem panel with built-in practice problems
 
 ### v0.8: Accounts
