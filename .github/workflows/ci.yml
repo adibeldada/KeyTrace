@@ -25,6 +25,10 @@ jobs:
       # 3. make the Maven wrapper runnable (files committed from Windows can lose this)
       - run: chmod +x mvnw
 
-      # 4. run the tests (-B = plain output, better for logs).
+      # 4. download the sandbox's Python image first, so the first test run doesn't
+      #    spend its 5-second time limit downloading it
+      - run: docker pull python:3.12-alpine
+
+      # 5. run the tests (-B = plain output, better for logs).
       #    Testcontainers starts its own throwaway PostgreSQL in Docker for the tests.
       - run: ./mvnw -B test
