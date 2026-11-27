@@ -1,16 +1,16 @@
 package com.adib.keytrace.sandbox;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CompletableFuture;
-import java.nio.file.attribute.PosixFilePermissions;
+import java.util.concurrent.TimeUnit;
 
 import org.springframework.stereotype.Service;
 
@@ -24,12 +24,12 @@ public class SandboxService {
         Path file = folder.resolve("main.py");                      // the path to main.py inside it
         Files.writeString(file, code);                              // create main.py with the person's code
 
-        //for linux users, windoes does not need this, this lets the container's user (1000) and reat the folder andfile
+        // Linux: let the container's user (1000) read the folder and file. Windows doesn't need this.
         if (folder.getFileSystem().supportedFileAttributeViews().contains("posix")) {
             Files.setPosixFilePermissions(folder, PosixFilePermissions.fromString("rwxr-xr-x"));
             Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-r--r--"));
         }
-        
+
         // B. pick a unique container name, so we can kill exactly this one later
         String name = "keytrace-run-" + UUID.randomUUID();
 
@@ -54,25 +54,33 @@ public class SandboxService {
                 .redirectErrorStream(true)
                 .start();
 
-        // E. read the output in the background (so a big output can't freeze us while we wait)
+        // E. read the output in the background, bit by bit, keeping what we get even if the run is killed
         CompletableFuture<String> outputFuture = CompletableFuture.supplyAsync(() -> {
+            ByteArrayOutputStream collected = new ByteArrayOutputStream();
+            byte[] chunk = new byte[1024];
             try (InputStream in = process.getInputStream()) {
-                byte[] bytes = in.readNBytes(10_000);              // keep at most 10,000 bytes
-                in.transferTo(OutputStream.nullOutputStream());    // throw away the rest, so the program never blocks
-                return new String(bytes, StandardCharsets.UTF_8);
+                int n;
+                while ((n = in.read(chunk)) != -1) {                       // keep reading until the program ends
+                    int room = 10_000 - collected.size();                  // cap at 10,000 bytes
+                    if (room > 0) collected.write(chunk, 0, Math.min(n, room));
+                    // past the cap we keep reading but throw it away, so the program never blocks
+                }
             } catch (IOException e) {
-                return "";
+                // the stream was closed because we killed the process: keep what we already have
             }
+            return collected.toString(StandardCharsets.UTF_8);
         });
 
         // F. wait max 5 seconds, kill it if it's still running
         boolean finished = process.waitFor(5, TimeUnit.SECONDS);
         boolean timedOut = !finished;
 
-        if (timedOut){
+        if (timedOut) {
             new ProcessBuilder("docker", "kill", name).start().waitFor(5, TimeUnit.SECONDS);   // stop the container
-            process.destroyForcibly();                                                       // stop the "docker run" command itself
-            process.waitFor(); 
+            if (!process.waitFor(5, TimeUnit.SECONDS)) {   // docker run normally exits by itself once the container is killed
+                process.destroyForcibly();                 // only force it if it didn't
+                process.waitFor();
+            }
         }
 
         String output = outputFuture.get(5, TimeUnit.SECONDS);   // the text it printed (collected in step E)
@@ -83,6 +91,6 @@ public class SandboxService {
         Files.deleteIfExists(folder);   // 2. then the folder, which is empty now
 
         // H. return the result
-        return new RunResult(output, exitCode, timedOut);   // placeholder until step H
+        return new RunResult(output, exitCode, timedOut);
     }
 }
